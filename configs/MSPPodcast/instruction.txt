@@ -1,0 +1,2 @@
+Classify the following inputs into one the following emotions per input: {labels}.
+

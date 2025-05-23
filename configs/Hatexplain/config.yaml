@@ -1,0 +1,6 @@
+train_splits: train
+test_splits: test
+max_new_tokens: 15
+accelerate: True
+logging_level: debug
+text_preprocessor: False

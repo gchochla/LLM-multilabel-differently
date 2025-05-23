@@ -1,0 +1,10 @@
+root_dir: /path/to//MSP-Podcast-1.11
+train_splits: train
+test_splits: dev
+instruction_prompt: ./configs/MSPPodcast/instruction.txt
+incontext_prompt: ./configs/MSPPodcast/incontext.txt
+system_prompt: ./configs/MSPPodcast/system.txt
+max_new_tokens: 15
+accelerate: True
+logging_level: debug
+text_preprocessor: False

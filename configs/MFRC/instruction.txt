@@ -1,0 +1,2 @@
+Classify the following inputs into none, one, or multiple the following moral foundations per input: {labels}.
+

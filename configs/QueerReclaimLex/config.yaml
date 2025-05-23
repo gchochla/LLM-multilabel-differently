@@ -1,0 +1,10 @@
+root_dir: /path/to//QueerReclaimLex
+train_splits: train
+test_splits: test
+instruction_prompt: ./configs/QueerReclaimLex/instruction.txt
+incontext_prompt: ./configs/QueerReclaimLex/incontext.txt
+system_prompt: ./configs/QueerReclaimLex/system.txt
+max_new_tokens: 10
+accelerate: True
+logging_level: debug
+text_preprocessor: False

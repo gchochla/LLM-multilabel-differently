@@ -1,0 +1,2 @@
+Consider whether the following inputs present harm or not to the mentioned LGBTQ group, and answer with: {labels}.
+

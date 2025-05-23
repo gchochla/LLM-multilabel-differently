@@ -1,0 +1,2 @@
+You will be presented with different settings with the contents of various boxes and the transportation of the items between the boxes. Track the position of the different items within the boxes, and when you are asked about the contents of the box, respond with the contents of the specific box only.
+

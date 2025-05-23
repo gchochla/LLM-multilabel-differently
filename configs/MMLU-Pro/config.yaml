@@ -1,0 +1,9 @@
+train_splits: train
+test_splits: dev
+instruction_prompt: ./configs/MMLU-Pro/instruction.txt
+incontext_prompt: ./configs/MMLU-Pro/incontext.txt
+system_prompt: ./configs/MMLU-Pro/system.txt
+max_new_tokens: 5
+accelerate: True
+logging_level: debug
+text_preprocessor: False

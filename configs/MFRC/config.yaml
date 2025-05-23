@@ -1,0 +1,10 @@
+root_dir: /path/to//mfrc
+train_splits: train
+test_splits: dev
+instruction_prompt: ./configs/MFRC/instruction.txt
+incontext_prompt: ./configs/MFRC/incontext.txt
+system_prompt: ./configs/MFRC/system.txt
+max_new_tokens: 30
+accelerate: True
+logging_level: debug
+text_preprocessor: False

@@ -1,0 +1,2 @@
+Identify the type of information a question is seeking by assigning it to one of the categories {labels}.
+

@@ -1,0 +1,9 @@
+train_splits: train
+test_splits: test
+instruction_prompt: ./configs/TREC/instruction.txt
+incontext_prompt: ./configs/TREC/incontext.txt
+system_prompt: ./configs/TREC/system.txt
+max_new_tokens: 10
+accelerate: True
+logging_level: debug
+text_preprocessor: False

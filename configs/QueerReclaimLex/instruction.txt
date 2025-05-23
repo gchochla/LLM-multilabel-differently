@@ -1,0 +1,2 @@
+Classify the following inputs into none, one, or multiple the following harms towards the mentioned LGBTQ group: {labels}.
+

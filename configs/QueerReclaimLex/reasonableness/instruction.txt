@@ -1,0 +1,2 @@
+Assess the reasonableness of the provided harm label for each input. Namely, evaluate whether the label makes sense for its corresponding input, under some reasonable interpretation. Reply only with {labels}.
+

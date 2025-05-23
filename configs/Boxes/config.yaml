@@ -1,0 +1,11 @@
+label_format: polysyndeton
+root_dir: /path/to//boxes-dataset-v1/
+train_splits: train
+test_splits: dev
+instruction_prompt: ./configs/Boxes/instruction.txt
+incontext_prompt: ./configs/Boxes/incontext.txt
+system_prompt: ./configs/Boxes/system.txt
+max_new_tokens: 30
+accelerate: True
+logging_level: debug
+text_preprocessor: False

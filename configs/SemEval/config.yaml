@@ -1,0 +1,11 @@
+language: English
+root_dir: /path/to//semeval2018task1
+train_splits: train
+test_splits: dev
+instruction_prompt: ./configs/SemEval/instruction.txt
+incontext_prompt: ./configs/SemEval/incontext.txt
+system_prompt: ./configs/SemEval/system.txt
+max_new_tokens: 30
+accelerate: True
+logging_level: debug
+text_preprocessor: False
