@@ -1,8 +1,8 @@
 # LLMs do Multi-Label Classification Differently
 
-Link pending...
-<!-- This repo contains the official implementation of [Large Language Models do Multi-Label Classification Differently](https://arxiv.org/abs/).  -->
-Repo is still under construction, some scripts are missing.
+This repo contains the official implementation of [Large Language Models do Multi-Label Classification Differently](https://arxiv.org/abs/2505.17510). 
+
+Repo is still under construction, so some scripts are missing.
 
 ## Abstract
 
