@@ -2,7 +2,7 @@
 
 This repo contains the official implementation of [Large Language Models do Multi-Label Classification Differently](https://arxiv.org/abs/2505.17510). 
 
-Repo is still under construction, so some scripts are missing.
+If you have any questions, bugs, or comments, please contact mjma@usc.edu or chochlak@usc.edu!
 
 ## Abstract
 
@@ -79,16 +79,31 @@ Also, you should create a `.env` file with your OpenAI key if you want to perfor
 OPENAI_API_KEY=<your-openai-key>
 ```
 
-### Analysis
+### Main Experiments
+
+The majority of the scripts are located in `scripts/prob_distr`. The main python file is `llm_prob_distr.py`, but the entrypoint for calling this python function is in all of the `pipeline-*.sh` bash scripts. All the `pipeline-*.sh` scripts take the following ordered arguments:
+- Position 1: distribution type to evaluate (`baseline` for most experiments; `unary`/`binary` for results on distribution alignment; `multilabel_icl` for a sweep of multilabel prompts for Figure 6)
+- Position 2: IDs to use for testing; most experiments will use `main_test_set`. See the folder `prob_distr_ids` for valid lists of testing IDs
+- Position 3: Which GPUs to use (int based, i.e. to fit into `cuda:x`)
+- Position 4: Model to use, should be exact Huggingface name
+- Position 5: Whether to use `vllm` for efficiency (UNTESTED, might not work: leave blank to run with normal `transformers` library)
+
+For example, to run the main experiments for MFRC, you could run:
+
+```
+bash pipeline-MFRC.sh baseline main_test_set 0 meta-llama/Llama-3.1-8B
+```
+
+After successfully running these scripts, a folder should appear under `logs/{dataset}/{test_id_set}/{distribution_type}/{model_name}_x`, where `x` is an integer that is usually 0 but sometimes 1 or higher. For example the above script would create the folder `logs/MFRC/main_test_set/baseline/meta-llama--Llama-3.1-8B_0`. There is a file in that folder, `indexed_metrics.yml`, which is the file that contains all of the relevant information for that experiment. It lists each individual test stimulus, along with its logits and probabilities for every generated label.
+
+All of the `plot*.py` files are the files for plotting Figures 4, 5, and 6 and they use various `indexed_metrics.yml` files to process and analyze the data. If you want to run them, some of the initial settings might need to change according to which log files they point to.
+
+### Linear Probing Analysis
 
 - `scripts/ml-distribution/linear-probing.sh` will run the scripts to, first, run the models on the entire dataset, and then run linear probing one them.
 - `scripts/ml-distribution/plot_figures.sh` will plot their distributions.
-
-More scripts pending...
 
 ### Distribution Alignment
 
 - `scripts/ml-distribution/scores.sh` will calculate the scores of the linear probes to calculate alignment.
 - `scripts/training/demux_ds.sh` followed by `demux_extract.sh` will calculate the scores of Demux (BERT-based) for alignment.
-
-More scripts pending...

@@ -589,3 +589,447 @@ class FinetuneEvaluator:
         self.logger.info(f'Micro F1 Score:{micro_f1}')
         self.logger.info(f'Macro F1 Score:{macro_f1}')
         return {'jaccard': jaccard, 'micro_f1': micro_f1, 'macro_f1': macro_f1}
+
+class DistributionEstimator(BaseTrainer):
+    @staticmethod
+    def argparse_args() -> dict[str, dict[str, Any]]:
+        args = BaseTrainer.argparse_args()
+        args_discard = [
+            "save_model",
+            "discard_classifier",
+            "classifier_layer_name",
+            "lr",
+            "adam_beta1",
+            "adam_beta2",
+            "adam_epsilon",
+            "weight_decay",
+            "eval_steps",
+            "max_steps",
+            "num_train_epochs",
+            "train_batch_size",
+            "eval_batch_size",
+            "warmup_ratio",
+            "early_stopping_patience",
+            "early_stopping_metric",
+            "early_stopping_delta",
+            "early_stopping_lower_better",
+        ]
+        for arg in args_discard:
+            args.pop(arg)
+        args.update(
+            dict(
+                distribution=dict(
+                    type=str,
+                    help='type of llm distribution to calculate',
+                    choices=[
+                        'baseline',
+                        'binary',
+                        'unary',
+                        'multilabel_ICL'
+                    ],
+                    metadata=dict(name=True, name_priority=3),
+                    searchable=True
+                )
+            )
+        )
+        return args
+
+    def __init__(self, experiment_manager, *args, **kwargs):
+        setattr(experiment_manager, "eval_batch_size", 1)
+        kwargs["experiment_manager"] = experiment_manager
+
+        super().__init__(*args, **kwargs)
+
+        self.label_similarity = self.any_dataset.any_dataset.label_similarity
+        
+    def run_init(self):
+        initial_label_tokens = self.test_dataset.get_initial_label_tokens()
+        self.model.set_label_decoding_utils(initial_label_tokens)
+
+    def get_logits_from_model(
+        self, return_vals: Any, *args, **kwargs
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+
+        device = (
+            "cuda"
+            if self.exp_manager.device == "auto"
+            else self.exp_manager.device
+        )
+
+        batch_preds: list[list[str]] = return_vals["preds"]
+        preds = torch.tensor(
+            [
+                [int(label in preds) for label in self.any_dataset.label_set]
+                for preds in batch_preds
+            ],
+            device=device,
+        )
+
+        return preds, return_vals.get("scores", None)
+
+    def get_extra_data_from_model(
+        self, return_vals: dict[str, str | torch.Tensor], batch: dict[str, Any]
+    ) -> dict[str, list[Any]]:
+        if "text" in return_vals:
+            odict = dict(
+                outs=return_vals["text"],
+                residual_outs=return_vals.get(
+                    "residual_text", [None] * len(return_vals["text"])
+                ),
+                prefix_outs=return_vals.get(
+                    "prefix_text", [None] * len(return_vals["text"])
+                ),
+            )
+        else:
+            odict = dict(outs=return_vals["ids"])
+            residual_outs = return_vals.get("residual_ids", None)
+            if residual_outs is not None:
+                odict["residual_outs"] = residual_outs.tolist()
+            else:
+                odict["residual_outs"] = [None] * len(odict["outs"])
+
+        for k in return_vals:
+            if "attention" in k:
+                # list so that is is not perceived
+                # as a random list of arguments but a vector
+                odict[k] = [return_vals[k].tolist()]
+
+        if self.label_similarity is not None:
+            odict["semantic_f1"] = [
+                float(
+                    pointwise_semantic_f1_score(
+                        preds,
+                        self.index_label_set(gt),
+                        self.label_similarity,
+                    )[0]
+                ) for preds, gt in zip(return_vals["preds"], batch["label"])
+            ]
+           
+        # add logits, top_token and top_token_logit
+        if "logits" in return_vals:
+            odict["logits"] = return_vals["logits"]
+            
+        if "top_token" in return_vals:
+            odict["top_token"] = return_vals["top_token"]
+        
+        if "top_token_logit" in return_vals:
+            odict["top_token_logit"] = return_vals["top_token_logit"]
+            
+        if "top_tokens" in return_vals:
+            odict["top_tokens"] = return_vals["top_tokens"]
+        
+        if "outs_ids" in return_vals:
+            odict["outs_ids"] = return_vals["outs_ids"]
+            
+        if "id_index" in return_vals:
+            odict["outs_id_index"] = return_vals["id_index"]
+            
+        if "all_scores" in return_vals:
+            odict["all_scores"] = return_vals["all_scores"]
+
+        return odict
+
+    def calculate_cls_loss(
+        self,
+        logits: tuple[torch.Tensor],
+        labels: torch.Tensor,
+        train: bool,
+        aggregate: bool = True,
+        epoch: int = 0,
+    ) -> torch.Tensor:
+        device = (
+            "cuda"
+            if self.exp_manager.device == "auto"
+            else self.exp_manager.device
+        )
+        if aggregate:
+            return torch.tensor(0.0, device=device)
+        return torch.zeros(len(labels), device=device)
+
+    def input_batch_args(self, batch: dict[str, Any]) -> dict[str, Any]:
+        encoding = {k: v[0] for k, v in batch["encoding"].items()}
+
+        if "{cot}" in self.any_dataset.incontext_prompt:
+            sidx = self.any_dataset.incontext_prompt.index("{cot}") + len(
+                "{cot}"
+            )
+            eidx = self.any_dataset.incontext_prompt.index("{label}")
+            prefix_cutoff_str = self.any_dataset.incontext_prompt[
+                sidx:eidx
+            ].strip()
+        else:
+            prefix_cutoff_str = None
+
+        cutoff_str = self.any_dataset.incontext_prompt.split("{text}")[0]
+        cutoff_str = [cutoff_str.strip(), cutoff_str]
+
+        return encoding | dict(
+            # assumes that the text appears first, which is reasonable for causal LMs
+            cutoff_str=cutoff_str,
+            prefix_cutoff_str=prefix_cutoff_str,
+            label_parser=self.any_dataset.label_parser,
+        )
+
+    def batch_labels(self, batch: dict[str, Any]):
+        if "demo_label" in batch and batch["demo_label"] is not None:
+            return batch["demo_label"]
+        return batch["label"]
+
+    def batch_ids(self, batch: dict[str, Any]):
+        return batch["id"]
+
+    def get_eval_preds_from_batch(
+        self, logits: tuple[torch.Tensor, torch.Tensor | None]
+    ) -> list[list[int]]:
+        return logits[0].tolist()
+
+    def get_eval_scores_from_batch(
+        self, logits: tuple[torch.Tensor, torch.Tensor | None]
+    ) -> list[dict[str, float]] | None:
+        if logits[1] is not None:
+            return logits[1]
+        return None
+
+    def run_end(self):
+        self.exp_manager.log_metrics()
+        # self._save_best_model()
+        # self.exp_manager.aggregate_results()
+        # self.exp_manager.plot(
+        #     groups=(
+        #         [
+        #             [f"{clss}_f1" for clss in self.dev_dataset.label_set],
+        #             [f"{clss}_auc" for clss in self.dev_dataset.label_set],
+        #         ]
+        #         if self.do_eval
+        #         else None
+        #     )
+        # )
+
+    def evaluation_metrics(
+        self,
+        eval_outs: dict[str, Any],
+        eval_outs_id: dict[str, Any],
+        eval_extras: dict[str, Any],
+        data_loader: DataLoader | None = None,
+    ) -> dict[str, Any]:
+        sep = self.any_dataset.any_dataset.id_separator
+
+        annotator_info = {
+            _id.split(sep)[1]: {
+                "true": [],
+                "pred": [],
+            }
+            for _id in eval_outs_id["ids"]
+        }
+        for _id, true, pred in zip(
+            eval_outs_id["ids"],
+            eval_outs_id["gt"] or [None] * len(eval_outs_id["ids"]),
+            eval_outs_id["preds"] or [None] * len(eval_outs_id["ids"]),
+        ):
+            annotator_id = _id.split(sep)[1]
+            
+            # bug hotfix for unary/binary for overriding the label set
+            if len(true) != len(pred):
+                annotator_info[annotator_id]['true'].append(true)
+                annotator_info[annotator_id]['pred'].append(true)
+            else:
+                annotator_info[annotator_id]["true"].append(true)
+                annotator_info[annotator_id]["pred"].append(pred)
+
+        results = {}
+
+        for annotator_id, info in annotator_info.items():
+            # zero division should 1 for all matching and constant labels and predictions
+            # we set it to 0 because that is unlikely to happen
+            
+            macro_f1 = f1_score(
+                info["true"], info["pred"], average="macro", zero_division=0
+            )
+            micro_f1 = f1_score(
+                info["true"], info["pred"], average="micro", zero_division=0
+            )
+
+            js = jaccard_score(
+                info["true"], info["pred"], average="samples", zero_division=1
+            )
+
+            f1_scores = f1_score(
+                info["true"], info["pred"], average=None, zero_division=0
+            )
+
+            results[annotator_id] = {
+                "jaccard_score": js,
+                "micro_f1": micro_f1,
+                "macro_f1": macro_f1,
+            } | {
+                f"{clss}_f1": f1
+                for clss, f1 in zip(data_loader.dataset.label_set, f1_scores)
+            }
+
+            if self.label_similarity is not None:
+                semantic_f1 = semantic_f1_score(
+                    info["true"],
+                    info["pred"],
+                    self.label_similarity,
+                    num_to_str_fn=self.index_label_set,
+                )
+
+                results[annotator_id]["semantic_f1"] = semantic_f1
+
+        return results
+
+    def index_label_set(
+        self, labels: torch.Tensor | int | list[int]
+    ) -> str | list[str]:
+        return self.any_dataset.any_dataset.index_label_set(labels)
+
+    def evaluate(self, *args, **kwargs):
+        
+        # super().evaluate(*args, **kwargs)
+        
+        """
+        In the case of single-label data, super().evaluate (from the ember BaseTrainer) will
+        crash. So we are copying over the functionality and adding a single-label check.
+        If we find single-label data, we will convert the multi-label gt to single-label.
+        This is not an ideal implementation, but no way around it unless we can change the
+        BaseTrainer.evaluate function (which I don't want to do).
+        """
+        is_single_label = False
+        
+        # get arguments
+        data_loader = args[0]
+        tqdm_message = args[1] if len(args) > 1 else "Evaluation"
+        epoch = args[2] if len(args) > 2 else None
+        
+        self.model.eval()
+        self.eval_init(data_loader)
+        
+        eval_outs, eval_outs_id, eval_extras = self.get_evals_from_dataset(
+            data_loader, tqdm_message, epoch
+        )
+        
+        if not isinstance((eval_outs_id['gt'][0]), list): # single-label
+            is_single_label = True
+            num_labels = len(eval_outs_id['preds'][0])
+            
+            # convert index to one-hot list
+            def to_one_hot(index):
+                return [1 if i == index else 0 for i in range(num_labels)]
+            eval_outs_id['gt'] = [to_one_hot(truth) for truth in eval_outs_id['gt']]
+            
+        others = self.evaluation_metrics(
+            eval_outs,
+            eval_outs_id,
+            eval_extras,
+            data_loader = data_loader,
+        )
+        
+        if others:
+            eval_outs.update(others)
+            
+        self.model.train()
+        self.eval_end(data_loader)
+        
+        def identify(idict):
+            ids = idict.get("ids", None)
+
+            if ids is None:
+                return None
+
+            odict = {}
+            for k, vs in idict.items():
+                if k == "ids":
+                    continue
+                if vs is None:
+                    vs = [None] * len(ids)
+                for id, v in zip(ids, vs):
+                    odict.setdefault(id, {}).setdefault(k, v)
+            return odict
+        
+        # Need to convert back from one-hot to index for future code compatability
+        if is_single_label:
+            def to_index(one_hot):
+                return one_hot.index(max(one_hot))
+            eval_outs_id['gt'] = [to_index(truth) for truth in eval_outs_id['gt']]
+            eval_outs_id['preds'] = [to_index(pred) for pred in eval_outs_id['preds']]
+        
+        
+        annotator_results, example_info = eval_outs, identify(eval_outs_id)
+        
+        """
+        End of copied (and modified) super().evaluate call.
+        """
+
+        # annotator_results:
+        #   per annotator results, IDs are annotator IDs or "aggregate"
+        #   + some aggregate metrics
+        # example_info:
+        #   per example info IDs are going to be example_id - annotator_id
+        #   the actual example results have annotator_id == "aggregate"
+
+        aggregate_results = annotator_results.pop("aggregate", {})
+
+        # remove dummy losses
+        for k in list(annotator_results):
+            if not isinstance(annotator_results[k], dict):
+                annotator_results.pop(k)
+
+        sep = self.any_dataset.any_dataset.id_separator
+
+        aggregate_info = {}
+        # annotator_info = {}
+        attentions = {}
+        
+        for k, v in example_info.items():
+            example_id, annotator_id = k.split(sep)
+
+            # add text for easier debugging
+            example = self.any_dataset.test_dataset.getitem_by_id(example_id)
+            v["text"] = example["text"]
+            for kk in list(v):
+                if kk in ("preds", "gt", "pred"):
+                    v[kk] = self.index_label_set(v[kk])
+                if kk == "checked_label":
+                    v[kk] = self.any_dataset.any_dataset.index_label_set(v[kk])
+                elif "attention" in kk:
+                    attentions.setdefault(annotator_id, {}).setdefault(
+                        example_id, {}
+                    )[kk] = v.pop(kk)
+            
+            """
+            Another change here from ember.BaseTrainer - saving everything to aggregate_info.
+            Makes it easier so that everything gets saved to indexed_metrics.yml.
+            """
+            example_id = k.replace('__aggregate', '')
+            aggregate_info[example_id] = v
+
+            # if annotator_id == "aggregate":
+                # aggregate_info[example_id] = v
+            # else:
+                # annotator_info.setdefault(annotator_id, {})[example_id] = v
+
+        # we have to make numpy scalars into floats manually
+        # because we are using manual logging
+        annotator_results = {
+            k: {kk: float(vv) for kk, vv in v.items()}
+            for k, v in annotator_results.items()
+        }
+
+        self.exp_manager.set_custom_data(
+            annotator_results, "annotator_metrics.yml"
+        )
+        # self.exp_manager.set_custom_data(annotator_info, "annotator_preds.yml")
+        if attentions:
+            self.exp_manager.set_custom_data(attentions, "attentions.pt")
+            
+        return aggregate_results, aggregate_info
+
+class vDistributionEstimator(DistributionEstimator):
+    def input_batch_args(self, batch):
+        inp = super().input_batch_args(batch)
+        return dict(
+            text=batch["text"][0],
+            cutoff_str=inp["cutoff_str"][0],
+            prefix_cutoff_str=inp["prefix_cutoff_str"],
+            label_parser=inp["label_parser"],
+        )
