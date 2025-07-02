@@ -4,7 +4,7 @@ from legm.argparse_utils import parse_args_and_metadata
 import os
 import copy
 
-from llm_subj import (
+from llm_ml import (
     PromptDataset,
     UnaryBreakdownDataset,
     BinaryBreakdownDataset,
@@ -15,7 +15,7 @@ from llm_subj import (
     CONSTANT_ARGS,
     DATASETS,
 )
-from llm_subj.utils import clean_cuda
+from llm_ml.utils import clean_cuda
 
 model = None
 
@@ -23,24 +23,6 @@ model = None
 # make its own function to avoid memory leaks
 def loop(args, metadata):
     global model
-    
-    # for debugging
-    
-    # args.alternative_experiment_name = \
-        # '/scratch1/mjma/llm_subjectivity/subjective-tasks-llms/logs/GoEmotions/prob_distr/baseline/debugging'
-        
-    # import shutil
-    # experiment_folder = f'logs/MMLUPro/{args.alternative_experiment_name.replace(r"{distribution}", args.distribution)}_0'
-    # print(f'EXPERIMENT FOLDER: {experiment_folder}')
-    
-    # if os.path.exists(experiment_folder):
-        # shutil.rmtree(experiment_folder)
-    
-    # args.alternative_experiment_name = os.path.join(
-    #     'prob_distr',
-    #     'baseline',
-    #     args.alternative_experiment_name
-    # )
     
     exp_manager = ExperimentManager(
         "./logs",

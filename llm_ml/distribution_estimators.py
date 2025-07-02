@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 
-from llm_subj.load_dataset_annotations import get_dataset_label_order
+from llm_ml.load_dataset_annotations import get_dataset_label_order
 
 class DistributionEstimator(ABC):
     ACCEPTED_TYPES = ['baseline', 'output', 'unary', 'binary', 'binary_outcome', 'max', 'SFT_output', 'SFT_max']

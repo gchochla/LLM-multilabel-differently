@@ -3,7 +3,7 @@ from legm import splitify_namespace, ExperimentManager
 from legm.argparse_utils import parse_args_and_metadata
 import os
 
-from llm_subj import (
+from llm_ml import (
     PromptDataset,
     UnaryBreakdownDataset,
     BinaryBreakdownDataset,
@@ -13,29 +13,11 @@ from llm_subj import (
     CONSTANT_ARGS,
     DATASETS,
 )
-from llm_subj.utils import clean_cuda
+from llm_ml.utils import clean_cuda
 
 
 # make its own function to avoid memory leaks
 def loop(args, metadata):
-    
-    # for debugging
-    
-    # args.alternative_experiment_name = \
-        # '/scratch1/mjma/llm_subjectivity/subjective-tasks-llms/logs/GoEmotions/prob_distr/baseline/debugging'
-        
-    # import shutil
-    # experiment_folder = f'logs/MMLUPro/{args.alternative_experiment_name.replace(r"{distribution}", args.distribution)}_0'
-    # print(f'EXPERIMENT FOLDER: {experiment_folder}')
-    
-    # if os.path.exists(experiment_folder):
-        # shutil.rmtree(experiment_folder)
-    
-    # args.alternative_experiment_name = os.path.join(
-    #     'prob_distr',
-    #     'baseline',
-    #     args.alternative_experiment_name
-    # )
     
     exp_manager = ExperimentManager(
         "./logs",
@@ -137,73 +119,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""
-
-score debugging
-
-ember.trainer get_evals_from_dataset (line 1146)
-    - model.forward
-    - extra variable
-    llm_subj.trainers.py get_extra_data_from_model (line 73)
-        - return_vals variable
-    
-1. create Trainer extensions for:
-    - Baseline
-    - Unary breakdown
-    - Binary breakdown
-
-2. Create different prompts
-    - Identify where prompts are created
-    - Mess around live with prompts themselves
-    - Create valid, replicable prompts
-        - For binary, flip + average two labels
-        
-3. Create evaluation metrics
-    - Make a script for evaluation (so that Yiorgos can extend)
-    - MLE baseline
-    - Monte Carlo simulation
-
-
-dumping metrics into indexed_metrics.yml (will be main yml file)
-
-creation and writing of indexed_metrics.yml: legm.exp_manager.log_metrics (line 1058)
-    - just dumps self._best_metric_dict_indexed
-        - which is determined in legm.exp_manager.set_best (line 1007)
-            - based on the best value in self.metric_dict_indexed
-                - which is set in legm.exp_manager.set_metric (line 536, 584)
-                    - which is called in legm.exp_manager.set_dict_metrics (line 602, 624)
-                        - which is called in ember.trainer.run (line 918, 1140)
-                        
-Llama tokens:
-    'a': 64
-    'A': 32
-    ' A': 362
-    ' a': 264
-    
-    'b': 65
-    'B': 33
-    ' B': 426
-    ' b': 293
-
-- move seaparate_question_labels to the dataset itself
-
-- unary and binary in-context examples:
-    - random every time
-    - random, but fixed within a sample
-    - fixed across all samples
-
-todo:
-
-- investigate sampling bias (?)
-- calculate multi-label distributions for:
-    - baseline
-    - output
-    - unary
-    - binary
-- multi-label is a series of independent distributions, normalized based on the "none" distribution
-    - zero-shot approximation
-    - dev set using Platt scaling
-
-
-"""

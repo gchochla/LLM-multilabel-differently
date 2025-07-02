@@ -8,12 +8,12 @@ import random
 
 import torch
 from legm import from_namespace
-from llm_subj.base_datasets import TokenizationMixin
-from llm_subj.base_prompts import (
+from llm_ml.base_datasets import TokenizationMixin
+from llm_ml.base_prompts import (
     PromptBaseDataset,
     ReasonablenessPromptBaseDataset,
 )
-from llm_subj.utils import string_overlap_idx_in_token_space
+from llm_ml.utils import string_overlap_idx_in_token_space
 
 class UnaryBreakdownDataset(TokenizationMixin, PromptBaseDataset):
     """Prompt dataset for unary breakdown classification, based on other TextDatasetWithPriors."""
