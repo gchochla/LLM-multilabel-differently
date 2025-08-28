@@ -1,6 +1,6 @@
-# LLMs do Multi-Label Classification Differently
+# [EMNLP Main 2025] LLMs do Multi-Label Classification Differently
 
-This repo contains the official implementation of [Large Language Models do Multi-Label Classification Differently](https://arxiv.org/abs/2505.17510). 
+This repo contains the official implementation of [Large Language Models do Multi-Label Classification Differently](https://arxiv.org/abs/2505.17510), to appear in the Main Conference Proceedings of EMNLP 2025. 
 
 If you have any questions, bugs, or comments, please contact mjma@usc.edu or chochlak@usc.edu!
 
