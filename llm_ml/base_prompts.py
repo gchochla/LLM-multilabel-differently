@@ -32,7 +32,7 @@ class ExampleSamplerMixin:
             ),
             sampling_strategy=dict(
                 type=str,
-                choices=["complete", "similarity", "uniform"],
+                choices=["complete", "similarity", "uniform", "multilabel"],
                 help="how to sample examples",
                 searchable=True,
                 metadata=dict(name=True, name_priority=1),
@@ -341,6 +341,14 @@ class ExampleSamplerMixin:
             samples = self._uniform_sample(
                 query=query, dataset=dataset, shot=shot
             )
+        elif 'multilabel' in self.sampling_strategy:
+            if len(self.sampling_strategy.split('_')) > 1:
+                ratio = float(self.sampling_strategy.split('_')[1])
+            else:
+                ratio = 0.5
+            samples = self._multilabel_sample(
+                query=query, dataset=dataset, shot=shot, ratio=ratio
+            )
 
         return samples
 
@@ -565,6 +573,39 @@ class ExampleSamplerMixin:
         # shuffle to avoid bias
         random.shuffle(inds)
         return [dataset[i] for i in inds]
+
+    def _multilabel_sample(
+        self,
+        query: dict[str, str | torch.Tensor],
+        dataset: TextDatasetWithPriors,
+        shot: int,
+        ratio: float,
+    ) -> list[dict[str, str | torch.Tensor]]:
+        """Samples `shot` examples from `dataset` to use in the prompt
+        of `query` that are multilabel."""
+
+        random.seed(self._example_sampler_mixin_data["seed"])
+
+        multilabel_idx = []
+        singlelabel_idx = []
+        nolabel_idx = []
+        for i in range(len(dataset)):
+            datum = dataset[i]
+            if datum['label'].sum().item() > 1:
+                multilabel_idx.append(i)
+            elif datum['label'].sum().item() == 1:
+                singlelabel_idx.append(i)
+            else:
+                nolabel_idx.append(i)
+
+        examples = []
+        if ratio > 0:
+            examples.extend([dataset[i] for i in random.sample(multilabel_idx, int(shot * ratio))])
+        if len(examples) < shot:
+            examples.extend([dataset[i] for i in random.sample(singlelabel_idx, shot - len(examples))])
+        random.shuffle(examples)
+
+        return examples
 
 
 class LabelSimilarityMixin:
